@@ -1,3 +1,5 @@
+![Banner](banner.png)
+
 # misconfig-ConfigObfuscator
 Redacts sensitive data (e.g., passwords, API keys) in configuration files, replacing them with placeholders or obfuscated values. Helps with sharing configurations securely for debugging or auditing. - Focused on Check for misconfigurations in configuration files or infrastructure definitions
 
