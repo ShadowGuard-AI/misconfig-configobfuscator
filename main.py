@@ -42,6 +42,12 @@ class ConfigObfuscator:
         # Patterns for strings that embed a "name: value" pair (for example
         # items inside a list). The value part is what gets replaced.
         self.patterns = [
+            # These patterns search a string value for a stem followed by
+            # a colon, anywhere in the text, with no word boundary before
+            # the stem. A log line or a note that merely quotes a setting,
+            # like a sentence ending in the word password followed by a
+            # colon, matches, and the whole string is then replaced, not
+            # just the part after the colon.
             r"((?:%s)\s*:).*" % stem for stem in self.sensitive_stems
         ] + [
             r'(("(?:%s)"\s*:).*)' % stem for stem in self.sensitive_stems
@@ -54,6 +60,11 @@ class ConfigObfuscator:
         for stem in self.sensitive_stems:
             if stem == normalized or f"_{stem}_" in padded or normalized.startswith(stem + "_") or normalized.endswith("_" + stem):
                 return True
+        # Plural forms escape me. A key named passwords matches no
+        # stem here, because each test wants the stem whole, bounded
+        # by underscores, or at an edge with an underscore beside it,
+        # and passwords offers none of those. The same goes for
+        # tokens and secrets as key names.
         return False
 
     def load_config(self) -> Optional[Dict[str, Any]]:
@@ -81,6 +92,10 @@ class ConfigObfuscator:
 
             # Attempt to parse as YAML first
             try:
+                # For a non JSON suffix I try YAML first, and since YAML
+                # accepts JSON documents, the JSON attempt below is nearly
+                # unreachable. A file that YAML rejects is almost never one
+                # JSON would have accepted.
                 config = yaml.safe_load(file_content)
                 logging.info(f"Successfully loaded {self.input_file} as YAML.")
                 return config
@@ -128,6 +143,10 @@ class ConfigObfuscator:
             elif isinstance(value, dict):
                 return self.obfuscate_config(value, path)
             elif isinstance(value, list):
+                # Every item in a list shares the list's own path, so the
+                # recorded redacted keys repeat the same path once per item
+                # and the count printed in main counts those repeats. It is
+                # a count of redaction events, not of distinct keys.
                 return [obfuscate_value(item, path) for item in value]
             else:
                 return value
@@ -173,6 +192,12 @@ class ConfigObfuscator:
         try:
             if output_format == 'YAML':
                 with open(self.output_file, 'w') as f:
+                    # Saving goes through the parsed data, so comments in the
+                    # original file do not survive into the output. For a tool
+                    # whose job is removing secrets that is mostly a kindness,
+                    # comments are a classic place for a stray credential, but
+                    # anyone diffing the result should expect the whole file's
+                    # formatting and key order to change as well.
                     yaml.dump(config, f, indent=2)  # Use indent for readability
                 logging.info(f"Successfully saved obfuscated config to {self.output_file} as YAML.")
                 return True
